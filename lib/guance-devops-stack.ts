@@ -1,23 +1,27 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as authorizers from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as devopsagent from 'aws-cdk-lib/aws-devopsagent';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
 
 export interface GuanceDevopsConfig {
-  agentSpaceId: string;
+  agentSpaceId?: string;
+  agentSpaceName?: string;
   region?: string;
   feishuWebhookUrl?: string;
   wechatWebhookUrl?: string;
   apiKey: string;
+  dedupTtlSeconds?: number;
   tags?: Record<string, string>;
 }
 
@@ -33,7 +37,22 @@ export class GuanceDevopsStack extends cdk.Stack {
     if (!config.apiKey) {
       throw new Error('config.apiKey is required. Run "npm run setup" to generate one.');
     }
-    const spaceArn = `arn:aws:aidevops:${this.region}:${this.account}:agentspace/${config.agentSpaceId}`;
+
+    // Auto-create an Agent Space when agentSpaceId is not provided.
+    let agentSpaceId: string;
+    if (config.agentSpaceId) {
+      agentSpaceId = config.agentSpaceId;
+    } else {
+      const space = new devopsagent.CfnAgentSpace(this, 'AgentSpace', {
+        name: config.agentSpaceName || 'guance-devops-agent',
+      });
+      agentSpaceId = space.attrAgentSpaceId;
+      new cdk.CfnOutput(this, 'AgentSpaceId', {
+        value: agentSpaceId,
+        description: '自动创建的 DevOps Agent Space ID',
+      });
+    }
+    const spaceArn = `arn:aws:aidevops:${this.region}:${this.account}:agentspace/${agentSpaceId}`;
 
     if (config.tags) {
       for (const [key, value] of Object.entries(config.tags)) {
@@ -71,6 +90,17 @@ export class GuanceDevopsStack extends cdk.Stack {
         },
       });
 
+    // ==================== Dedup Table ====================
+    const dedupTable = new dynamodb.Table(this, 'DedupTable', {
+      tableName: 'guance-devops-dedup',
+      partitionKey: { name: 'fingerprint', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'expireAt',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const dedupTtl = String(config.dedupTtlSeconds ?? 1800);
+
     // ==================== Bridge Lambda ====================
     const bridgeFn = new lambda.Function(this, 'BridgeFn', {
       functionName: 'guance-devops-bridge',
@@ -78,13 +108,18 @@ export class GuanceDevopsStack extends cdk.Stack {
       handler: 'lambda_function.handler',
       code: pythonBundling(path.join(__dirname, '..', 'lambda', 'bridge')),
       timeout: cdk.Duration.seconds(30),
-      environment: { AGENT_SPACE_ID: config.agentSpaceId },
+      environment: {
+        AGENT_SPACE_ID: agentSpaceId,
+        DEDUP_TABLE: dedupTable.tableName,
+        DEDUP_TTL_SECONDS: dedupTtl,
+      },
     });
 
     bridgeFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['aidevops:CreateBacklogTask'],
       resources: [spaceArn],
     }));
+    dedupTable.grantReadWriteData(bridgeFn);
 
     // ==================== API Key Authorizer Lambda ====================
     const authorizerFn = new lambda.Function(this, 'AuthorizerFn', {
@@ -157,9 +192,7 @@ def handler(event, context):
           'Investigation Failed',
           'Investigation Timed Out',
         ],
-        detail: {
-          metadata: { agent_space_id: [config.agentSpaceId] },
-        },
+        detail: { metadata: { agent_space_id: [agentSpaceId] } },
       },
     });
 
