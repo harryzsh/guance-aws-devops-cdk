@@ -12,8 +12,11 @@ if (!fs.existsSync(configPath)) {
 }
 
 const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-if (!config.agentSpaceId || config.agentSpaceId === 'YOUR_AGENT_SPACE_ID') {
-  console.error('❌ agentSpaceId is required in config.json');
+// Allow empty agentSpaceId to trigger the stack's auto-create path (creates
+// an Agent Space named "guance-devops-agent"). Only reject the placeholder.
+if (config.agentSpaceId === 'YOUR_AGENT_SPACE_ID') {
+  console.error('❌ agentSpaceId still has placeholder value in config.json.');
+  console.error('   Set it to an existing Agent Space ID, or to "" to auto-create one.');
   process.exit(1);
 }
 
