@@ -112,7 +112,7 @@ async function main() {
   const configPath = path.join(__dirname, '..', 'config.json');
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
   console.log(`\n✅ 配置已保存到 config.json`);
-  console.log(`   API Key: ${apiKey}`);
+  console.log(`   API Key: *** (saved to config.json)`);
   console.log(`\n下一步: npx cdk deploy\n`);
 }
 

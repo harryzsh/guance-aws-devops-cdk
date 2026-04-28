@@ -18,7 +18,7 @@ if (config.agentSpaceId === 'YOUR_AGENT_SPACE_ID') config.agentSpaceId = '';
 if (!config.apiKey) {
   config.apiKey = crypto.randomUUID();
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
-  console.log(`✨ Generated apiKey and saved to config.json: ${config.apiKey}`);
+  console.log('✨ Generated apiKey and saved to config.json. Check config.json for the value.');
 }
 
 const app = new cdk.App();
