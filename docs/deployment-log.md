@@ -239,3 +239,40 @@ aws dynamodb list-tables --region {your-region} | grep guance
 - Stack outputs captured in local notes.
 
 If any of these ever land in a commit, rotate the affected credentials **before** force-pushing any cleanup.
+
+
+---
+
+## Appendix — Update commands (pulling the latest change and redeploying)
+
+Use these when the repo already contains a previous successful deployment and you
+only need to roll out newer commits. Paths are intentionally generic — fill in
+your own working directory and credential file location.
+
+```bash
+# 1. Sync the repo
+cd {path-to-your-clone}/guance-aws-devops-cdk
+git checkout main
+git pull origin main
+
+# 2. Point AWS CLI at the right credentials / region
+export AWS_SHARED_CREDENTIALS_FILE={path-to-your-credentials-file}
+export AWS_DEFAULT_REGION={your-region}
+
+# 3. Install any new dependencies
+npm install
+
+# 4. Preview the change — does NOT apply anything
+npx cdk diff
+
+# 5. Apply only after reviewing the diff
+npx cdk deploy --require-approval never
+```
+
+Notes:
+- `npx cdk diff` is safe to run multiple times; always inspect it before `deploy`.
+- `--require-approval never` skips the interactive prompt for IAM/security
+  changes. Drop the flag if you prefer manual confirmation.
+- Lambda code changes only rebuild the bundled asset; no resource replacement.
+- Keep your credentials file outside the repo. Never commit `config.json` or
+  stack outputs.
