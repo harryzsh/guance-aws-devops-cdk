@@ -6,3 +6,7 @@ dist/
 *.js.map
 !lambda/**
 config.json
+
+# Python bytecode
+__pycache__/
+*.pyc
