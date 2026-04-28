@@ -10,8 +10,14 @@ async function main() {
     {
       type: 'text',
       name: 'agentSpaceId',
-      message: 'AWS DevOps Agent Space ID',
-      validate: (v: string) => v.length > 0 || 'Required',
+      message: 'AWS DevOps Agent Space ID（留空则由 CDK 自动创建）',
+      initial: '',
+    },
+    {
+      type: (prev: string) => (prev ? null : 'text'),
+      name: 'agentSpaceName',
+      message: '新 Agent Space 名称',
+      initial: 'guance-devops-agent',
     },
     {
       type: 'text',
@@ -30,7 +36,7 @@ async function main() {
     },
   ]);
 
-  if (!response.agentSpaceId) {
+  if (response.agentSpaceId === undefined) {
     console.log('❌ 已取消');
     process.exit(1);
   }
@@ -67,6 +73,13 @@ async function main() {
 
   const apiKey = apiKeyResp.apiKey || crypto.randomUUID();
 
+  const dedupResp = await prompts({
+    type: 'number',
+    name: 'dedupTtlSeconds',
+    message: '告警去重 TTL（秒，0=不去重）',
+    initial: 1800,
+  });
+
   // Tags
   const tags: Record<string, string> = {};
   const tagResp = await prompts({
@@ -87,10 +100,12 @@ async function main() {
 
   const config = {
     agentSpaceId: response.agentSpaceId,
+    agentSpaceName: response.agentSpaceName || undefined,
     region: response.region || 'us-east-1',
     feishuWebhookUrl,
     wechatWebhookUrl,
     apiKey,
+    dedupTtlSeconds: dedupResp.dedupTtlSeconds ?? 1800,
     tags,
   };
 

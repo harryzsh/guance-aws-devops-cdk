@@ -46,6 +46,8 @@ export class GuanceDevopsStack extends cdk.Stack {
       const space = new devopsagent.CfnAgentSpace(this, 'AgentSpace', {
         name: config.agentSpaceName || 'guance-devops-agent',
       });
+      // Align with README: `cdk destroy` should clean up the auto-created Space.
+      space.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       agentSpaceId = space.attrAgentSpaceId;
       new cdk.CfnOutput(this, 'AgentSpaceId', {
         value: agentSpaceId,

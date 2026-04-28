@@ -1,9 +1,11 @@
 {
-  "agentSpaceId": "YOUR_AGENT_SPACE_ID",
+  "agentSpaceId": "",
+  "agentSpaceName": "guance-devops-agent",
   "region": "us-east-1",
   "feishuWebhookUrl": "",
   "wechatWebhookUrl": "",
   "apiKey": "",
+  "dedupTtlSeconds": 1800,
   "tags": {
     "Project": "guance-devops",
     "Environment": "production"

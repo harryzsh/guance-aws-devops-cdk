@@ -12,10 +12,7 @@ if (!fs.existsSync(configPath)) {
 }
 
 const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-if (!config.agentSpaceId || config.agentSpaceId === 'YOUR_AGENT_SPACE_ID') {
-  console.error('❌ agentSpaceId is required in config.json');
-  process.exit(1);
-}
+if (config.agentSpaceId === 'YOUR_AGENT_SPACE_ID') config.agentSpaceId = '';
 
 // Persist an apiKey if missing, so it stays stable across synth/deploy.
 if (!config.apiKey) {
