@@ -222,6 +222,73 @@ aws cloudwatch put-metric-alarm \
 
 > **注意：** SNS 触发不经过 API Gateway，因此不需要 `x-api-key` 认证。请确保 SNS Topic 的访问策略仅允许可信来源发布消息。
 
+### 端到端测试（不依赖真实 CloudWatch 阈值）
+
+配完订阅后可以直接用 `aws sns publish` 模拟一条 CloudWatch Alarm 消息，走完整链路（SNS → Bridge Lambda → DevOps Agent → EventBridge → Notify Lambda → 飞书/企微）。
+
+1. 把一段 **合法 JSON** 写进文件（避免 shell 转义掉双引号）：
+
+```bash
+cat > /tmp/cw-alarm-test.json <<'EOF'
+{"AlarmName":"e2e-cw-alarm-test","AlarmDescription":"End-to-end SNS test","AlarmArn":"arn:aws:cloudwatch:us-west-2:123456789012:alarm:e2e-cw-alarm-test","NewStateValue":"ALARM","NewStateReason":"Threshold Crossed: CPU > 80%","Trigger":{"MetricName":"CPUUtilization","Namespace":"AWS/EC2","Dimensions":[{"name":"InstanceId","value":"i-0fakefake"}]}}
+EOF
+```
+
+2. 通过 SNS 发布（必须用 `file://`，不要直接把 JSON 塞进 `--message`）：
+
+```bash
+TOPIC_ARN=$(aws sns list-topics --query "Topics[?ends_with(TopicArn,'devops-agent-alarms')].TopicArn" --output text)
+
+aws sns publish \
+  --topic-arn "$TOPIC_ARN" \
+  --subject "ALARM: e2e-cw-alarm-test" \
+  --message file:///tmp/cw-alarm-test.json
+```
+
+3. 约 30~60 秒后检查链路各段：
+
+```bash
+# Bridge 应该 log: "Investigation created: {...}"
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/guance-devops-bridge \
+  --filter-pattern "Investigation created" \
+  --start-time $(($(date +%s) - 300))000
+
+# Notify 应该 log: "Feishu response: {...code:0, success...}"
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/devops-agent-notify \
+  --filter-pattern "Feishu response" \
+  --start-time $(($(date +%s) - 300))000
+
+# 也可以直接列出 DevOps Agent 里新建的 task
+aws devops-agent list-backlog-tasks \
+  --agent-space-id <your-agent-space-id> \
+  --query 'tasks[0].{title:title,priority:priority,status:status}'
+```
+
+正确结果：Bridge 看到 `Investigation created`；task 的 `priority=CRITICAL`（CloudWatch Alarm ALARM 状态默认映射为 critical→CRITICAL）；Notify 的 Feishu/WeCom response `code=0`；飞书群收到一条红色 header 的 `[CRITICAL] DevOps Agent: COMPLETED` 卡片。
+
+> **常见坑：** 如果 Bridge 日志出现 `Skip: status=`（空 status），说明 SNS Message 字段不是合法 JSON——多半是把 JSON 直接写在 `--message "{...}"` 命令行里被 shell 吃掉了双引号。务必用 `file://` 从文件读取。
+
+### 清理 SNS 订阅（可选）
+
+端到端测试完不再需要 CloudWatch Alarm 集成时：
+
+```bash
+# 取消订阅
+SUB_ARN=$(aws sns list-subscriptions-by-topic --topic-arn "$TOPIC_ARN" \
+  --query "Subscriptions[?Protocol=='lambda'].SubscriptionArn" --output text)
+aws sns unsubscribe --subscription-arn "$SUB_ARN"
+
+# 删除 Topic（如果不再需要）
+aws sns delete-topic --topic-arn "$TOPIC_ARN"
+
+# 移除 Lambda 上的 SNS 调用权限
+aws lambda remove-permission \
+  --function-name guance-devops-bridge \
+  --statement-id sns-invoke
+```
+
 ## 测试验证
 
 部署完成后可以用 curl 测试：
