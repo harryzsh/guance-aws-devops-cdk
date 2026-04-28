@@ -51,7 +51,7 @@ export class GuanceDevopsStack extends cdk.Stack {
       agentSpaceId = space.attrAgentSpaceId;
       new cdk.CfnOutput(this, 'AgentSpaceId', {
         value: agentSpaceId,
-        description: '自动创建的 DevOps Agent Space ID',
+        description: 'Auto-created DevOps Agent Space ID',
       });
     }
     const spaceArn = `arn:aws:aidevops:${this.region}:${this.account}:agentspace/${agentSpaceId}`;
@@ -206,17 +206,17 @@ def handler(event, context):
 
     new cdk.CfnOutput(this, 'WebhookUrl', {
       value: webhookUrl,
-      description: '观测云 Webhook 通知对象地址',
+      description: 'Webhook URL for Guance notification target',
     });
 
     new cdk.CfnOutput(this, 'ApiKey', {
       value: config.apiKey,
-      description: '配置到观测云 Webhook Header: x-api-key',
+      description: 'Value for x-api-key header on the Guance Webhook',
     });
 
     new cdk.CfnOutput(this, 'NextStep', {
-      value: `在观测云创建 Webhook 通知对象，地址填 ${webhookUrl}，Header 添加 x-api-key: ${config.apiKey}`,
-      description: '部署后操作指引',
+      value: `In Guance console, create a Webhook notification target with URL=${webhookUrl} and header x-api-key=${config.apiKey}`,
+      description: 'Post-deploy instructions',
     });
   }
 }
