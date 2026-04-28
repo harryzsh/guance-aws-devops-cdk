@@ -68,9 +68,9 @@ def lambda_handler(event, context):
     mitigation_text = "\n".join(mitigation_lines) if mitigation_lines else "N/A"
 
     if FEISHU_WEBHOOK:
-        send_feishu(detail_type, status, title, task_id, symptoms_text, findings_text, mitigation_text)
+        send_feishu(detail_type, status, priority, title, task_id, symptoms_text, findings_text, mitigation_text)
     if WECHAT_WEBHOOK:
-        send_wechat(detail_type, status, title, task_id, symptoms_text, findings_text, mitigation_text)
+        send_wechat(detail_type, status, priority, title, task_id, symptoms_text, findings_text, mitigation_text)
 
     return {"statusCode": 200}
 
