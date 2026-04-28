@@ -28,6 +28,7 @@ def lambda_handler(event, context):
     task_id = meta.get("task_id", "")
     execution_id = meta.get("execution_id", "")
     status = data.get("status", detail_type)
+    priority = data.get("priority", "")  # CRITICAL / HIGH / MEDIUM / LOW / MINIMAL
 
     title = "N/A"
     if space_id and task_id:
