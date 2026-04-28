@@ -21,6 +21,24 @@ ddb = boto3.resource('dynamodb', region_name=REGION).Table(DEDUP_TABLE) if DEDUP
 # Higher number = more severe. Used for upgrade detection.
 LEVEL_ORDER = {'warning': 1, 'important': 2, 'critical': 3, 'urgent': 4}
 
+# Map incoming severity (Guance status / inferred from other sources) to
+# DevOps Agent Task priority. Unknown severity falls back to HIGH.
+SEVERITY_TO_PRIORITY = {
+    'urgent': 'CRITICAL',
+    'critical': 'CRITICAL',
+    'important': 'HIGH',
+    'error': 'HIGH',
+    'high': 'HIGH',
+    'warning': 'MEDIUM',
+    'medium': 'MEDIUM',
+    'low': 'LOW',
+    'info': 'LOW',
+}
+
+
+def _map_priority(severity):
+    return SEVERITY_TO_PRIORITY.get((severity or '').lower(), 'HIGH')
+
 
 def _level_rank(status):
     return LEVEL_ORDER.get(status.lower(), 0)
@@ -138,12 +156,13 @@ def handler(event, context):
         f"4. 给出根因分析和修复建议"
     )
 
+    priority = _map_priority(status)
     resp = client.create_backlog_task(
         agentSpaceId=AGENT_SPACE_ID,
         taskType='INVESTIGATION',
         title=f'[Auto] {title}'[:128],
         description=description,
-        priority='HIGH'
+        priority=priority
     )
 
     task = resp.get('task', {})

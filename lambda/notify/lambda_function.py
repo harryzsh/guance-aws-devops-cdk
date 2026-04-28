@@ -75,17 +75,34 @@ def lambda_handler(event, context):
     return {"statusCode": 200}
 
 
-def send_feishu(detail_type, status, title, task_id, symptoms, findings, mitigation):
-    color = "green" if "Completed" in detail_type else "red"
+# Feishu card color by priority. Falls back to detail-type based color when
+# priority is missing (backward compatible with old events).
+PRIORITY_COLOR = {
+    "CRITICAL": "red",
+    "HIGH": "orange",
+    "MEDIUM": "yellow",
+    "LOW": "blue",
+    "MINIMAL": "grey",
+}
+
+
+def send_feishu(detail_type, status, priority, title, task_id, symptoms, findings, mitigation):
+    if priority and priority in PRIORITY_COLOR:
+        color = PRIORITY_COLOR[priority]
+    else:
+        color = "green" if "Completed" in detail_type else "red"
+    severity_label = priority or "UNKNOWN"
     card = {
         "msg_type": "interactive",
         "card": {
             "header": {
-                "title": {"tag": "plain_text", "content": f"🔍 DevOps Agent: {status}"},
+                "title": {"tag": "plain_text",
+                          "content": f"🔍 [{severity_label}] DevOps Agent: {status}"},
                 "template": color
             },
             "elements": [
                 {"tag": "div", "text": {"tag": "lark_md", "content": f"**Title:** {title}"}},
+                {"tag": "div", "text": {"tag": "lark_md", "content": f"**Severity:** {severity_label}"}},
                 {"tag": "div", "text": {"tag": "lark_md", "content": f"**Task ID:** {task_id}"}},
                 {"tag": "hr"},
                 {"tag": "div", "text": {"tag": "lark_md", "content": f"**📋 Symptoms:**\n{symptoms}"}},
@@ -102,11 +119,13 @@ def send_feishu(detail_type, status, title, task_id, symptoms, findings, mitigat
         print(f"ERROR send_feishu: {e}")
 
 
-def send_wechat(detail_type, status, title, task_id, symptoms, findings, mitigation):
+def send_wechat(detail_type, status, priority, title, task_id, symptoms, findings, mitigation):
+    severity_label = priority or "UNKNOWN"
     header = '<font color="info">**🔍 调查完成**</font>' if "Completed" in detail_type \
         else '<font color="warning">**🔍 调查异常**</font>'
     content = f"""{header}
 > 标题:<font color="comment">{title}</font>
+> Severity:<font color="comment">{severity_label}</font>
 > 状态:<font color="comment">{status}</font>
 > Task ID:<font color="comment">{task_id}</font>
 
